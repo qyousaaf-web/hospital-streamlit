@@ -1,160 +1,79 @@
-# app.py - Hospital Management System with Patient Treatment Analytics (Streamlit + Plotly)
-import streamlit as st
-import sqlite3
-import pandas as pd
-import plotly.express as px
+# Enhanced Medical Records Form - Beautiful & Professional
+elif page == "Medical Records":
+    st.header("📋 Medical Records Management")
 
-# Page config
-st.set_page_config(page_title="Hospital Management System", page_icon="🏥", layout="wide")
+    tab1, tab2 = st.tabs(["📋 View All Records", "🩺 Add New Record"])
 
-# Custom CSS for beauty
-st.markdown("""
-<style>
-    .big-font { font-size: 50px !important; font-weight: bold; color: #2E86C1; text-align: center; }
-    .metric-value { font-size: 32px; font-weight: bold; color: #d62728; }
-</style>
-""", unsafe_allow_html=True)
+    with tab1:
+        st.subheader("Registered Medical Records")
+        records_df = get_data("MedicalRecords")
+        if records_df.empty:
+            st.info("No medical records added yet. Start by adding one! 👇")
+        else:
+            st.dataframe(records_df, use_container_width=True)
 
-# Database
-DB_FILE = "hospital.db"
+    with tab2:
+        st.markdown("""
+        <div style="background-color: #f0f8ff; padding: 20px; border-radius: 15px; border-left: 6px solid #4CAF50; margin-bottom: 20px;">
+            <h3 style="color: #2E86C1; margin:0;">🩺 Add New Medical Record</h3>
+            <p style="color: #555; margin:5px 0 0 0;">Fill in the details below to document patient treatment</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.executescript('''
-        CREATE TABLE IF NOT EXISTS Patients (
-            pat_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL, age INTEGER, gender TEXT,
-            phone TEXT, address TEXT, email TEXT
-        );
-        CREATE TABLE IF NOT EXISTS Doctors (
-            doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL, specialty TEXT
-        );
-        CREATE TABLE IF NOT EXISTS Appointments (
-            app_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pat_id INTEGER, doc_id INTEGER, app_date TEXT
-        );
-        CREATE TABLE IF NOT EXISTS MedicalRecords (
-            record_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pat_id INTEGER, doc_id INTEGER,
-            diagnosis TEXT, treatment TEXT, prescription TEXT, record_date TEXT DEFAULT (date('now'))
-        );
-        CREATE TABLE IF NOT EXISTS Billings (
-            bill_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pat_id INTEGER, amount REAL
-        );
-    ''')
-    conn.commit()
-    conn.close()
+        with st.form("medical_record_form", clear_on_submit=True):
+            # Patient & Doctor Section
+            st.markdown("### 👤 Patient & Doctor Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                pat_id = st.number_input("**Patient ID**", min_value=1, step=1, help="Enter registered Patient ID")
+            with col2:
+                doc_id = st.number_input("**Doctor ID**", min_value=1, step=1, help="Enter attending Doctor ID")
 
-init_db()
+            st.markdown("---")
 
-def get_data(table):
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql(f"SELECT * FROM {table}", conn)
-    conn.close()
-    return df
+            # Diagnosis Section
+            st.markdown("### 🩺 Diagnosis")
+            diagnosis = st.text_area(
+                "",
+                height=120,
+                placeholder="Describe symptoms, findings, and confirmed diagnosis...",
+                help="Be detailed and specific"
+            )
 
-# Sidebar
-st.sidebar.title("🏥 Hospital System")
-page = st.sidebar.radio("Navigate", [
-    "Home", "Patients", "Doctors", "Appointments", "Medical Records", "Treatment Analytics", "Billings"
-])
+            # Treatment Section
+            st.markdown("### 💉 Treatment Plan")
+            treatment = st.text_area(
+                "",
+                height=120,
+                placeholder="Outline procedures, therapies, or interventions performed...",
+                help="Include duration and follow-up if applicable"
+            )
 
-if page == "Home":
-    st.markdown('<p class="big-font">🏥 Hospital Dashboard</p>', unsafe_allow_html=True)
+            # Prescription Section
+            st.markdown("### 💊 Prescription & Medications")
+            prescription = st.text_area(
+                "",
+                height=120,
+                placeholder="List medications, dosage, frequency, and duration (e.g., Amoxicillin 500mg - 3 times daily for 7 days)...",
+                help="Include any special instructions"
+            )
 
-    patients = get_data("Patients")
-    records = get_data("MedicalRecords")
-    appointments = get_data("Appointments")
-    billings = get_data("Billings")
+            st.markdown("---")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Patients", len(patients))
-    col2.metric("Total Treatments", len(records))
-    col3.metric("Appointments", len(appointments))
-    col4.metric("Revenue $", f"{billings['amount'].sum():,.2f}" if not billings.empty else "0.00")
+            # Submit Button - Big, Green, Centered
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                submitted = st.form_submit_button(
+                    "💾 Save Medical Record",
+                    type="primary",
+                    use_container_width=True
+                )
 
-# ================ NEW: Patient Treatment Analytics ================
-elif page == "Treatment Analytics":
-    st.header("📊 Patient Treatment Analytics")
-
-    records = get_data("MedicalRecords")
-    patients = get_data("Patients")
-
-    if records.empty:
-        st.info("No treatment records yet. Add medical records to see analytics!")
-        st.stop()
-
-    # Merge with patient info for richer insights
-    merged = records.merge(patients[['pat_id', 'name', 'age', 'gender']], on='pat_id', how='left')
-
-    st.markdown("### 🔍 Top Diagnoses")
-    diagnosis_counts = merged['diagnosis'].value_counts().head(10)
-    diag_fig = px.bar(
-        x=diagnosis_counts.values,
-        y=diagnosis_counts.index,
-        orientation='h',
-        title="Most Common Diagnoses",
-        labels={"x": "Number of Cases", "y": "Diagnosis"},
-        color=diagnosis_counts.values,
-        color_continuous_scale="Viridis"
-    )
-    diag_fig.update_layout(height=500, showlegend=False)
-    st.plotly_chart(diag_fig, use_container_width=True)
-
-    st.markdown("### 💊 Most Prescribed Treatments")
-    treatment_counts = merged['treatment'].value_counts().head(10)
-    treat_fig = px.pie(
-        treatment_counts,
-        names=treatment_counts.index,
-        values=treatment_counts.values,
-        title="Treatment Distribution",
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
-    st.plotly_chart(treat_fig, use_container_width=True)
-
-    st.markdown("### 👥 Treatments by Gender")
-    gender_treat = merged.groupby(['gender', 'treatment']).size().reset_index(name='count')
-    gender_fig = px.bar(
-        gender_treat,
-        x='treatment',
-        y='count',
-        color='gender',
-        title="Treatments by Gender",
-        barmode='group',
-        color_discrete_sequence=px.colors.qualitative.Bold
-    )
-    st.plotly_chart(gender_fig, use_container_width=True)
-
-    st.markdown("### 📅 Treatment Trends Over Time")
-    merged['record_date'] = pd.to_datetime(merged['record_date'], errors='coerce')
-    time_trend = merged.groupby('record_date').size().reset_index(name='treatments')
-    trend_fig = px.line(
-        time_trend,
-        x='record_date',
-        y='treatments',
-        title="Daily Treatment Records",
-        markers=True,
-        color_discrete_sequence=["#2E86C1"]
-    )
-    st.plotly_chart(trend_fig, use_container_width=True)
-
-    st.markdown("### 🧑 Age vs Diagnosis")
-    if 'age' in merged.columns:
-        age_diag = merged.groupby(['age', 'diagnosis']).size().reset_index(name='count')
-        age_fig = px.scatter(
-            age_diag,
-            x='age',
-            y='diagnosis',
-            size='count',
-            color='count',
-            title="Diagnosis Frequency by Age",
-            color_continuous_scale="Plasma"
-        )
-        st.plotly_chart(age_fig, use_container_width=True)
-
-# Keep other pages (Patients, Doctors, etc.) as in previous versions
-
-st.sidebar.success("Now with Patient Treatment Analytics! 📊")
+            if submitted:
+                if pat_id and doc_id and diagnosis.strip():
+                    add_medical_record(pat_id, doc_id, diagnosis, treatment, prescription)
+                    st.success("✅ Medical record saved successfully!")
+                    st.balloons()  # Fun celebration animation
+                    st.rerun()
+                else:
+                    st.error("⚠️ Patient ID, Doctor ID, and Diagnosis are required fields!")
